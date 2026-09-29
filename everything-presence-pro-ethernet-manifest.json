@@ -1,6 +1,6 @@
 {
   "name": "Everything Presence Pro Ethernet",
-  "version": "1.3.0-hold.1",
+  "version": "1.3.0-hold.2",
   "home_assistant_domain": "esphome",
   "new_install_skip_erase": false,
   "builds": [
@@ -8,9 +8,7 @@
       "chipFamily": "ESP32",
       "ota": {
         "path": "everything-presence-pro-ethernet/everything-presence-pro-esp32.ota.bin",
-        "md5": "fd6248a2b581aa389069f5beda79d29f",
-        "summary": "Breaking change: Polygon zones only + automatic migration",
-        "release_url": "https://github.com/EverythingSmartHome/everything-presence-pro/releases/tag/v1.3.0-hold.1"
+        "md5": "3440812fc5b72ca633c00d64e14e8b1c"
       },
       "parts": [
         {
