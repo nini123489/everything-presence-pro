@@ -89,10 +89,12 @@ interval:
   - interval: 1s
     then:
       - lambda: |-
-          if (id(ld2450_stale_reset).state && id(extra_entities) >= 3) {
+          // A target frozen by assumed presence is not stuck, so leave it alone
+          if (id(ld2450_stale_reset).state && id(extra_entities) >= 3 && !id(assumed_present_hold_active)) {
             unsigned long now = millis();
-            unsigned long timeout_ms = (unsigned long)(id(ld2450_stale_timeout).state * 1000);
-            if ((now - id(target1_last_update)) > timeout_ms && id(ld2450_target1_active).state == true) {
+            long timeout_ms = (long)(id(ld2450_stale_timeout).state * 1000);
+            // Signed difference: target1_last_update may lie in the future after a reset
+            if ((long)(now - id(target1_last_update)) > timeout_ms && id(ld2450_target1_active).state == true) {
               ESP_LOGD("LD2450", "Stale target, clearing");
               id(reboot_ld2450_sensor).press();
               id(target1_last_update) = now + 3000; //Prevent another reset for at least 3s
