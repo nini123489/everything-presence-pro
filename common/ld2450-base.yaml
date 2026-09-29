@@ -78,6 +78,11 @@ globals:
     type: bool
     restore_value: False
     initial_value: 'false'
+  # Bitmask of zones whose "Hold Until Exit" latch should be cleared (bit 0 = zone 1)
+  - id: zone_latch_clear_request
+    type: int
+    restore_value: False
+    initial_value: '0'
 
 
 interval:
@@ -112,6 +117,33 @@ text_sensor:
     disabled_by_default: true
 
 button:
+  - platform: template
+    name: "Zone 1 Clear Hold"
+    id: ld2450_zone1_clear_hold
+    entity_category: config
+    on_press:
+      - lambda: 'id(zone_latch_clear_request) |= (1 << 0);'
+  - platform: template
+    name: "Zone 2 Clear Hold"
+    id: ld2450_zone2_clear_hold
+    entity_category: config
+    disabled_by_default: true
+    on_press:
+      - lambda: 'id(zone_latch_clear_request) |= (1 << 1);'
+  - platform: template
+    name: "Zone 3 Clear Hold"
+    id: ld2450_zone3_clear_hold
+    entity_category: config
+    disabled_by_default: true
+    on_press:
+      - lambda: 'id(zone_latch_clear_request) |= (1 << 2);'
+  - platform: template
+    name: "Zone 4 Clear Hold"
+    id: ld2450_zone4_clear_hold
+    entity_category: config
+    disabled_by_default: true
+    on_press:
+      - lambda: 'id(zone_latch_clear_request) |= (1 << 3);'
   - platform: template
     id: get_mmwave_firmware
     internal: True
@@ -226,6 +258,36 @@ switch:
     restore_mode: RESTORE_DEFAULT_OFF 
     optimistic: True
     entity_category: config
+
+  # Keep a zone occupied after its target is lost, with no timeout, until a
+  # tracked target is seen leaving the zone.
+  - platform: template
+    name: "Zone 1 Hold Until Exit"
+    id: ld2450_zone1_hold_until_exit
+    restore_mode: RESTORE_DEFAULT_OFF
+    optimistic: True
+    entity_category: config
+  - platform: template
+    name: "Zone 2 Hold Until Exit"
+    id: ld2450_zone2_hold_until_exit
+    restore_mode: RESTORE_DEFAULT_OFF
+    optimistic: True
+    entity_category: config
+    disabled_by_default: true
+  - platform: template
+    name: "Zone 3 Hold Until Exit"
+    id: ld2450_zone3_hold_until_exit
+    restore_mode: RESTORE_DEFAULT_OFF
+    optimistic: True
+    entity_category: config
+    disabled_by_default: true
+  - platform: template
+    name: "Zone 4 Hold Until Exit"
+    id: ld2450_zone4_hold_until_exit
+    restore_mode: RESTORE_DEFAULT_OFF
+    optimistic: True
+    entity_category: config
+    disabled_by_default: true
 
   - platform: template
     name: "Upside Down Mounting"
@@ -1028,6 +1090,15 @@ uart:
           // Extracted for consistency of read values
           int zone_counts[] = {0,0,0,0};
           int zone_exclusion_counts[] = {0,0};
+          bool in_zone_now[3][4] = {};
+
+          // "Zone N Hold Until Exit" state. A latched zone stays occupied after its
+          // target is lost until a tracked target is seen stepping out of it. A
+          // target counts as the same track across short dropouts only.
+          const unsigned long ZONE_EXIT_GAP_MS = 3000;
+          static bool zone_latched[4] = {false, false, false, false};
+          static bool last_in_zone[3][4] = {};
+          static unsigned long zone_seen_ms[3] = {0, 0, 0};
 
 
           bool p1_detected = *((uint16_t *)(&bytes[10])) != 0;
@@ -1083,10 +1154,10 @@ uart:
                 p1_detected = false;
                 target_masked = true;
               } else {
-                if (point_in_poly(p1_x, p1_y, poly_zones[0])) { zone_counts[0]++; id(last_zone_hold) = 1; }
-                if (point_in_poly(p1_x, p1_y, poly_zones[1])) { zone_counts[1]++; id(last_zone_hold) = 2; }
-                if (point_in_poly(p1_x, p1_y, poly_zones[2])) { zone_counts[2]++; id(last_zone_hold) = 3; }
-                if (point_in_poly(p1_x, p1_y, poly_zones[3])) { zone_counts[3]++; id(last_zone_hold) = 4; }
+                if (point_in_poly(p1_x, p1_y, poly_zones[0])) { zone_counts[0]++; id(last_zone_hold) = 1; in_zone_now[0][0] = true; }
+                if (point_in_poly(p1_x, p1_y, poly_zones[1])) { zone_counts[1]++; id(last_zone_hold) = 2; in_zone_now[0][1] = true; }
+                if (point_in_poly(p1_x, p1_y, poly_zones[2])) { zone_counts[2]++; id(last_zone_hold) = 3; in_zone_now[0][2] = true; }
+                if (point_in_poly(p1_x, p1_y, poly_zones[3])) { zone_counts[3]++; id(last_zone_hold) = 4; in_zone_now[0][3] = true; }
                 update_entry_state(0, p1_x, p1_y);
               }
               if (update_entities) {
@@ -1194,10 +1265,10 @@ uart:
                 p2_detected = false;
                 target_masked = true;
               } else {
-                if (point_in_poly(p2_x, p2_y, poly_zones[0])) { zone_counts[0]++; id(last_zone_hold) = 1; }
-                if (point_in_poly(p2_x, p2_y, poly_zones[1])) { zone_counts[1]++; id(last_zone_hold) = 2; }
-                if (point_in_poly(p2_x, p2_y, poly_zones[2])) { zone_counts[2]++; id(last_zone_hold) = 3; }
-                if (point_in_poly(p2_x, p2_y, poly_zones[3])) { zone_counts[3]++; id(last_zone_hold) = 4; }
+                if (point_in_poly(p2_x, p2_y, poly_zones[0])) { zone_counts[0]++; id(last_zone_hold) = 1; in_zone_now[1][0] = true; }
+                if (point_in_poly(p2_x, p2_y, poly_zones[1])) { zone_counts[1]++; id(last_zone_hold) = 2; in_zone_now[1][1] = true; }
+                if (point_in_poly(p2_x, p2_y, poly_zones[2])) { zone_counts[2]++; id(last_zone_hold) = 3; in_zone_now[1][2] = true; }
+                if (point_in_poly(p2_x, p2_y, poly_zones[3])) { zone_counts[3]++; id(last_zone_hold) = 4; in_zone_now[1][3] = true; }
                 update_entry_state(1, p2_x, p2_y);
               }
               if (update_entities) {
@@ -1304,10 +1375,10 @@ uart:
                 p3_detected = false;
                 target_masked = true;
               } else {
-                if (point_in_poly(p3_x, p3_y, poly_zones[0])) { zone_counts[0]++; id(last_zone_hold) = 1; }
-                if (point_in_poly(p3_x, p3_y, poly_zones[1])) { zone_counts[1]++; id(last_zone_hold) = 2; }
-                if (point_in_poly(p3_x, p3_y, poly_zones[2])) { zone_counts[2]++; id(last_zone_hold) = 3; }
-                if (point_in_poly(p3_x, p3_y, poly_zones[3])) { zone_counts[3]++; id(last_zone_hold) = 4; }
+                if (point_in_poly(p3_x, p3_y, poly_zones[0])) { zone_counts[0]++; id(last_zone_hold) = 1; in_zone_now[2][0] = true; }
+                if (point_in_poly(p3_x, p3_y, poly_zones[1])) { zone_counts[1]++; id(last_zone_hold) = 2; in_zone_now[2][1] = true; }
+                if (point_in_poly(p3_x, p3_y, poly_zones[2])) { zone_counts[2]++; id(last_zone_hold) = 3; in_zone_now[2][2] = true; }
+                if (point_in_poly(p3_x, p3_y, poly_zones[3])) { zone_counts[3]++; id(last_zone_hold) = 4; in_zone_now[2][3] = true; }
                 update_entry_state(2, p3_x, p3_y);
               }
               
@@ -1476,6 +1547,34 @@ uart:
           id(assumed_present_hold_active) = hold_active;
           id(assumed_present_until_ms) = hold_until;
 
+          bool zone_exited[4] = {false, false, false, false};
+          for (int i = 0; i < 3; i++) {
+            if (!detected_now[i]) continue;
+            bool continuing = zone_seen_ms[i] != 0 && (now - zone_seen_ms[i]) <= ZONE_EXIT_GAP_MS;
+            for (int z = 0; z < 4; z++) {
+              if (continuing && last_in_zone[i][z] && !in_zone_now[i][z]) zone_exited[z] = true;
+              last_in_zone[i][z] = in_zone_now[i][z];
+            }
+            zone_seen_ms[i] = now;
+          }
+
+          bool latch_enabled[4] = {
+            id(ld2450_zone1_hold_until_exit).state,
+            id(ld2450_zone2_hold_until_exit).state,
+            id(ld2450_zone3_hold_until_exit).state,
+            id(ld2450_zone4_hold_until_exit).state,
+          };
+          int clear_request = id(zone_latch_clear_request);
+          id(zone_latch_clear_request) = 0;
+          bool any_latched = false;
+          for (int z = 0; z < 4; z++) {
+            bool cleared = (clear_request & (1 << z)) != 0;
+            if (!latch_enabled[z] || poly_zones[z].count < 3) zone_latched[z] = false;
+            else if (zone_counts[z] > 0) zone_latched[z] = true;
+            else if (zone_exited[z] || cleared) zone_latched[z] = false;
+            any_latched = any_latched || zone_latched[z];
+          }
+
           // Zone counts are left untouched while assumed presence holds a lost
           // target, so automations keep seeing it in its zone.
           if (update_entities && id(extra_entities) >= 2 && !hold_active) {
@@ -1512,12 +1611,12 @@ uart:
               last_remaining = remaining;
             }
           }
-          id(ld2450_occupancy).publish_state(any_detected || hold_active);
+          id(ld2450_occupancy).publish_state(any_detected || hold_active || any_latched);
 
-          id(ld2450_zone1_occupancy).publish_state(zone_counts[0] > 0 || (hold_active && id(last_zone_hold) == 1));
-          id(ld2450_zone2_occupancy).publish_state(zone_counts[1] > 0 || (hold_active && id(last_zone_hold) == 2));
-          id(ld2450_zone3_occupancy).publish_state(zone_counts[2] > 0 || (hold_active && id(last_zone_hold) == 3));
-          id(ld2450_zone4_occupancy).publish_state(zone_counts[3] > 0 || (hold_active && id(last_zone_hold) == 4));
+          id(ld2450_zone1_occupancy).publish_state(zone_counts[0] > 0 || zone_latched[0] || (hold_active && id(last_zone_hold) == 1));
+          id(ld2450_zone2_occupancy).publish_state(zone_counts[1] > 0 || zone_latched[1] || (hold_active && id(last_zone_hold) == 2));
+          id(ld2450_zone3_occupancy).publish_state(zone_counts[2] > 0 || zone_latched[2] || (hold_active && id(last_zone_hold) == 3));
+          id(ld2450_zone4_occupancy).publish_state(zone_counts[3] > 0 || zone_latched[3] || (hold_active && id(last_zone_hold) == 4));
 
           id(ld2450_entry1_occupancy).publish_state(entry_counts[0] > 0);
           id(ld2450_entry2_occupancy).publish_state(entry_counts[1] > 0);
